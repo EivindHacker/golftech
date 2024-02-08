@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Golf Tech</title>
+		<link rel="stylesheet" href="./stylesheet.css" />
+	</head>
+	<body style="overflow: hidden; margin: 0; padding: 0; font-family: sans-serif; background-color: #f3f3f3">
+		<canvas id="cvs" style="display: block; width: 100%; height: 100%; position: fixed; top: 0px; z-index: -1"></canvas>
+
+		<!--
+		<div class="menuBar">
+			<img src="./logo.png" class="logo" />
+			<h1 class="title">Golfswing</h1>
+			<div class="menuBtnCont">
+				<div class="menuBtn">Home</div>
+				<div class="menuBtn">About</div>
+				<div class="menuBtn">Contact</div>
+			</div>
+		</div>
+    -->
+
+		<div class="cameraControls">
+			<h2 style="text-align: right">Camera Positions</h2>
+			<div style="display: flex; gap: 5px; margin-top: -10px">
+				<button id="Toe" class="ccBtn">Toe Side</button>
+				<button id="Heel" class="ccBtn">Heel Side</button>
+				<button id="Behind" class="ccBtn">Behind</button>
+				<button id="Front" class="ccBtn">In Front</button>
+				<button id="Over" class="ccBtn">Over</button>
+				<button id="Under" class="ccBtn">Under</button>
+			</div>
+		</div>
+
+		<div class="settingsCont">
+			<button class="btn" id="playBtn">Play</button>
+			<button class="btn" id="grassBtn">Grass</button>
+			<span class="speedTitle">Speed</span>
+			<input type="range" min="0.05" max="2" value="1" step="0.05" class="slider" id="speedSlider" />
+		</div>
+
+		<script type="module">
+			import * as THREE from "./three_js/three.module.js";
+			import {OrbitControls} from "./three_js/OrbitControls.js";
+			import * as dat from "./three_js/dat.gui.module.js";
+			import {GLTFLoader} from "./three_js/GLTFLoader.js";
+
+			// Get all buttons by id
+			const buttons = document.querySelectorAll(".ccBtn");
+
+			// Add click event listeners to each button
+			buttons.forEach((button) => {
+				button.addEventListener("click", function () {
+					// Call switchCameraPosition function with the button's id as parameter
+					switchCameraPosition(this.id);
+				});
+			});
+
+			//THREE
+
+			let selectedStrike = sessionStorage.getItem("strikeType");
+			console.log(sessionStorage);
+			console.log(selectedStrike);
+
+			if (selectedStrike == null) {
+				selectedStrike = "Straight";
+			}
+
+			const cvs = document.getElementById("cvs");
+
+			let scene = null,
+				renderer = null,
+				camera = null;
+			let aspectRatio = window.innerWidth / window.innerHeight;
+
+			let playSpeed = 1;
+			const speedSlider = document.getElementById("speedSlider");
+
+			speedSlider.addEventListener("mouseup", function () {
+				console.log(play);
+				if (play) {
+					mixer.timeScale = speedSlider.value;
+				}
+			});
+
+			let play = false;
+			const playBtn = document.getElementById("playBtn");
+
+			playBtn.addEventListener("mousedown", playAction);
+
+			function playAction() {
+				if (!play) {
+					play = true;
+					playBtn.innerText = "Pause";
+					mixer.timeScale = speedSlider.value;
+				} else {
+					play = false;
+					playBtn.innerText = "Play";
+					mixer.timeScale = 0;
+				}
+			}
+
+			let disableGrass = false;
+
+			const grassBtn = document.getElementById("grassBtn");
+
+			grassBtn.addEventListener("mousedown", grassAction);
+
+			function grassAction() {
+				if (disableGrass) {
+					disableGrass = false;
+					grass.visible = true;
+					grassBtn.classList.remove("disableGrass");
+				} else {
+					disableGrass = true;
+					grass.visible = false;
+					grassBtn.classList.add("disableGrass");
+				}
+			}
+
+			function Init3DWorld() {
+				// Set up your world scene
+				scene = new THREE.Scene();
+				scene.background = null;
+				//scene.fog = new THREE.Fog(0xa0a0a0, 10, 1400);
+
+				// Set up your scene light
+				AddLights();
+
+				// Setup Your scene camera
+				camera = new THREE.PerspectiveCamera(48, aspectRatio, 1, 2000);
+				//camera = new THREE.OrthographicCamera( 100 / - 2, 100 / 2, 100 / 2, 100 / - 2, 0, 200 );
+				camera.position.set(10, 8, 8);
+
+				camera.lookAt(0, 0, 0);
+
+				// Setup your scene ground
+				AddGroundPlane();
+
+				// Setup your scene models
+				LoadModels(scene);
+
+				// Set up your world renderer
+				const world = {
+					canvas: cvs,
+					antialias: true,
+				};
+				renderer = new THREE.WebGLRenderer(world, {alpha: true});
+				renderer.setClearColor(0x000000, 0);
+				renderer.setPixelRatio(aspectRatio);
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				//renderer.shadowMap.enabled = true;
+
+				//CONTROLS
+
+				const controls = new OrbitControls(camera, renderer.domElement);
+				controls.minPolarAngle = 0;
+				controls.target.set(0, 0, 0);
+				controls.update();
+
+				requestAnimationFrame(UpdateFrame);
+			}
+
+			function Resize(aWindow) {
+				aspectRatio = window.innerWidth / window.innerHeight;
+				camera.aspect = aspectRatio;
+				camera.updateProjectionMatrix();
+				renderer.setSize(aWindow.innerWidth, aWindow.innerHeight);
+			}
+
+			function UpdateFrame() {
+				renderer.render(scene, camera);
+				requestAnimationFrame(UpdateFrame);
+			}
+
+			function AddLights() {
+				const illumination = 0.3;
+				let light = new THREE.DirectionalLight("#ffffff", illumination);
+				light.position.set(0, 0, 100);
+				scene.add(light);
+				//scene.add(new THREE.DirectionalLightHelper(light, 10, "#ff4400"));
+
+				light = new THREE.DirectionalLight("#ffffff", illumination);
+				light.position.set(0, 0, -100);
+				scene.add(light);
+				//scene.add(new THREE.DirectionalLightHelper(light, 10, "#ff4400"));
+
+				light = new THREE.DirectionalLight("#ffffff", illumination);
+				light.position.set(100, 0, 0);
+				scene.add(light);
+				//scene.add(new THREE.DirectionalLightHelper(light, 10, "#ff4400"));
+
+				light = new THREE.DirectionalLight("#ffffff", illumination);
+				light.position.set(-100, 0, 0);
+				scene.add(light);
+				//scene.add(new THREE.DirectionalLightHelper(light, 10, "#ff4400"));
+
+				light = new THREE.DirectionalLight("#ffffff", illumination);
+				light.position.set(0, 100, 0);
+				scene.add(light);
+				//scene.add(new THREE.DirectionalLightHelper(light, 10, "#ff4400"));
+
+				light = new THREE.DirectionalLight("#ffffff", illumination);
+				light.position.set(0, -100, 0);
+				scene.add(light);
+				//scene.add(new THREE.DirectionalLightHelper(light, 10, "#ff4400"));
+
+				light = new THREE.AmbientLight(0x404040, 2); // soft white light
+				scene.add(light);
+			}
+
+			function AddGroundPlane() {
+				const plane = new THREE.PlaneBufferGeometry(2000, 2000);
+				const matOption = {color: "#a6a6a6", depthWrite: false};
+				const mat = new THREE.MeshPhongMaterial(matOption);
+				const mesh = new THREE.Mesh(plane, mat);
+				mesh.position.y = -2; // so we're above the ground slightly
+				mesh.rotation.x = -Math.PI / 2;
+				//mesh.receiveShadow = true;
+				//scene.add(mesh);
+
+				const grid = new THREE.GridHelper(15, 20, "#000000", "#9a9a9a");
+				grid.material.opacity = 0.2;
+				grid.position.y = -0.2;
+				grid.material.transparent = true;
+				scene.add(grid);
+				scene.add(new THREE.AxesHelper(200));
+			}
+
+			let club;
+			let ball;
+			let mixer;
+			let grass;
+
+			function LoadModels() {
+				const loader = new GLTFLoader();
+				loader.load(`${selectedStrike}-Strike.gltf`, GLTFLoadDone);
+			}
+
+			function GLTFLoadDone(GLTFStructure) {
+				GLTFStructure.scene.traverse(GLTFEachObject);
+				scene.add(GLTFStructure.scene);
+				setInterval(AnimateObjects, 33, 33);
+
+				mixer = new THREE.AnimationMixer(GLTFStructure.scene);
+				const clips = GLTFStructure.animations;
+				const clip = THREE.AnimationClip;
+				console.log(clips);
+				clips.forEach(function (clip) {
+					mixer.clipAction(clip).play();
+				});
+				if (!play) {
+					mixer.timeScale = 0;
+				}
+			}
+
+			function GLTFEachObject(aObject) {
+				console.log(aObject);
+
+				if (aObject.name == "Club") {
+					club = aObject;
+					console.log("Club");
+					club.rotation.y = 1;
+				}
+				if (aObject.name == "Ball") {
+					ball = aObject;
+					console.log("Ball");
+				}
+				if (aObject.name == "Grass") {
+					grass = aObject;
+					console.log("Ball");
+				}
+				/*
+        if (aObject.isMesh) {
+          aObject.castShadow = true;
+          aObject.receiveShadow = true;
+        } else if (aObject.isGroup) {
+          aObject.castShadow = true;
+        }
+        */
+			}
+
+			function camerLookAt() {
+				camera.lookAt(0, 0, 0);
+			}
+
+			// Function to switch camera position based on the button clicked
+			function switchCameraPosition(position) {
+				// Example implementation - replace with your actual camera switching logic
+
+				if (position === "Toe") {
+					console.log("Switching camera to Toe Side");
+					camera.position.set(0, 0, 14);
+					camerLookAt();
+				} else if (position === "Heel") {
+					console.log("Switching camera to Heel Side");
+					camera.position.set(0, 0, -14);
+					camerLookAt();
+				} else if (position === "Behind") {
+					console.log("Switching camera to Behind");
+					camera.position.set(-14, 0, 0);
+					camerLookAt();
+				} else if (position === "Front") {
+					console.log("Switching camera to In Front");
+					camera.position.set(14, 0, 0);
+					camerLookAt();
+				} else if (position === "Over") {
+					console.log("Switching camera to Over");
+					camera.position.set(0, 14, 0);
+					camerLookAt();
+				} else if (position === "Under") {
+					console.log("Switching camera to Under");
+					camera.position.set(0, -14, 0);
+					camerLookAt();
+				}
+			}
+
+			const clock = new THREE.Clock();
+			function AnimateObjects() {
+				mixer.update(clock.getDelta());
+			}
+
+			function onWindowResize() {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize(window.innerWidth, window.innerHeight);
+			}
+
+			window.addEventListener("resize", onWindowResize, false);
+
+			Init3DWorld(cvs);
+		</script>
+	</body>
+</html>
